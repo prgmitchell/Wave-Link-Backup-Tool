@@ -13,6 +13,8 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
+use tempfile::TempDir;
+use tempfile::tempdir;
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
 use zip::{ZipArchive, ZipWriter};
@@ -20,6 +22,14 @@ use zip::{ZipArchive, ZipWriter};
 pub fn create_backup(options: BackupOptions) -> Result<BackupCreateResponse, String> {
     let local_state =
         resolve_wavelink_local_state(None).ok_or("Wave Link LocalState path was not found")?;
+    create_backup_from_local_state(options, &local_state)
+}
+
+fn create_backup_from_local_state(
+    options: BackupOptions,
+    local_state: &Path,
+) -> Result<BackupCreateResponse, String> {
+    let snapshot = snapshot_local_state(local_state)?;
 
     let output_dir = options
         .output_dir
@@ -39,7 +49,7 @@ pub fn create_backup(options: BackupOptions) -> Result<BackupCreateResponse, Str
         .as_ref()
         .and_then(|p| app_info_from_probe(p.app_info.as_ref()));
 
-    let mut files = collect_files(&local_state)?;
+    let mut files = collect_files(snapshot.path())?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
     let mut entries = Vec::with_capacity(files.len());
@@ -69,15 +79,15 @@ pub fn create_backup(options: BackupOptions) -> Result<BackupCreateResponse, Str
         &backup_path,
         &manifest,
         &files,
-        &local_state,
+        snapshot.path(),
         live_channels_snapshot,
     )?;
 
     // Guard against silently returning a corrupted archive.
-    // A short retry avoids transient read/write timing issues on some systems.
+    // A single short retry is defense-in-depth for transient IO timing.
     let mut inspection = inspect_backup(&backup_path)?;
     if !inspection.valid_hashes {
-        thread::sleep(Duration::from_millis(120));
+        thread::sleep(Duration::from_millis(60));
         inspection = inspect_backup(&backup_path)?;
     }
     if !inspection.valid_hashes {
@@ -96,6 +106,37 @@ pub fn create_backup(options: BackupOptions) -> Result<BackupCreateResponse, Str
         backup_path: backup_path.to_string_lossy().to_string(),
         manifest,
     })
+}
+
+fn snapshot_local_state(source_root: &Path) -> Result<TempDir, String> {
+    let snapshot = tempdir().map_err(|e| e.to_string())?;
+    let snapshot_root = snapshot.path();
+
+    for entry in WalkDir::new(source_root).follow_links(false) {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let source_path = entry.path();
+        let rel = source_path
+            .strip_prefix(source_root)
+            .map_err(|e| e.to_string())?;
+        if rel.as_os_str().is_empty() {
+            continue;
+        }
+        let destination = snapshot_root.join(rel);
+
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&destination).map_err(|e| e.to_string())?;
+            continue;
+        }
+
+        if entry.file_type().is_file() {
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            fs::copy(source_path, destination).map_err(|e| e.to_string())?;
+        }
+    }
+
+    Ok(snapshot)
 }
 
 fn ensure_backup_extension(name: &str) -> String {
@@ -426,4 +467,115 @@ fn file_sha256(path: &Path) -> Result<String, String> {
         hasher.update(&buffer[..n]);
     }
     Ok(hex::encode(hasher.finalize()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use tempfile::tempdir;
+
+    #[test]
+    fn snapshot_local_state_copies_all_files() {
+        let source = tempdir().expect("create source");
+        let nested = source.path().join("Logs/Nested");
+        fs::create_dir_all(&nested).expect("create nested");
+
+        let settings = source.path().join("Settings.json");
+        let log = source.path().join("Logs/Nested/trace.log");
+        fs::write(&settings, br#"{"ok":true}"#).expect("write settings");
+        fs::write(&log, b"hello log").expect("write log");
+
+        let snapshot = snapshot_local_state(source.path()).expect("snapshot");
+        assert!(snapshot.path().join("Settings.json").exists());
+        assert!(snapshot.path().join("Logs/Nested/trace.log").exists());
+        assert_eq!(
+            fs::read(snapshot.path().join("Settings.json")).expect("read snap settings"),
+            fs::read(settings).expect("read source settings")
+        );
+    }
+
+    #[test]
+    fn backup_created_from_snapshot_remains_valid_if_source_changes_after_snapshot() {
+        let source = tempdir().expect("create source");
+        let log_dir = source.path().join("Logs");
+        fs::create_dir_all(&log_dir).expect("create log dir");
+
+        let source_log = log_dir.join("ElgatoWaveLink.log");
+        let initial_bytes = b"initial log bytes".to_vec();
+        fs::write(&source_log, &initial_bytes).expect("write initial log");
+
+        let snapshot = snapshot_local_state(source.path()).expect("snapshot");
+
+        // Simulate a volatile live file changing immediately after snapshot creation.
+        fs::write(&source_log, b"mutated live log bytes").expect("mutate source");
+
+        let mut files = collect_files(snapshot.path()).expect("collect snapshot files");
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut entries = Vec::with_capacity(files.len());
+        for (rel, abs) in &files {
+            entries.push(BackupFileEntry {
+                relative_path: rel.clone(),
+                size: fs::metadata(abs).expect("metadata").len(),
+                sha256: file_sha256(abs).expect("hash"),
+            });
+        }
+
+        let manifest = BackupManifest {
+            manifest_version: 1,
+            tool_version: env!("CARGO_PKG_VERSION").to_string(),
+            created_at: Utc::now(),
+            source_os: std::env::consts::OS.to_string(),
+            source_os_version: os_info::get().version().to_string(),
+            wave_link: None,
+            local_state_relative_path: "payload".to_string(),
+            files: entries,
+        };
+
+        let out_dir = tempdir().expect("create output");
+        let archive_path = out_dir.path().join("snapshot.wlbk");
+        write_backup_archive(
+            &archive_path,
+            &manifest,
+            &files,
+            snapshot.path(),
+            None,
+        )
+        .expect("write archive");
+
+        let inspection = inspect_backup(&archive_path).expect("inspect archive");
+        assert!(inspection.valid_hashes);
+
+        let extracted = tempdir().expect("extract dir");
+        extract_backup_to_dir(&archive_path, extracted.path()).expect("extract archive");
+        assert_eq!(
+            fs::read(extracted.path().join("Logs/ElgatoWaveLink.log")).expect("read extracted"),
+            initial_bytes
+        );
+    }
+
+    #[test]
+    fn create_backup_produces_valid_archive_single_attempt() {
+        let source = tempdir().expect("create source");
+        fs::create_dir_all(source.path().join("Logs")).expect("create logs");
+        fs::write(source.path().join("Settings.json"), br#"{"mixer":"ok"}"#)
+            .expect("write settings");
+        fs::write(source.path().join("Logs/runtime.log"), b"runtime")
+            .expect("write runtime log");
+
+        let output = tempdir().expect("create output");
+        let created = create_backup_from_local_state(
+            BackupOptions {
+                output_dir: Some(output.path().to_string_lossy().to_string()),
+                backup_name: Some("single-attempt".to_string()),
+            },
+            source.path(),
+        )
+        .expect("create backup");
+
+        assert!(Path::new(&created.backup_path).exists());
+        let inspection = inspect_backup(Path::new(&created.backup_path)).expect("inspect backup");
+        assert!(inspection.valid_hashes);
+    }
 }
