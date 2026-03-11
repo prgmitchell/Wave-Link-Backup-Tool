@@ -1,6 +1,6 @@
 [package]
 name = "wavelink_backup_tool"
-version = "0.2.0"
+version = "0.3.0"
 description = "Wave Link backup/import/export utility"
 authors = ["prgmitchell"]
 license = "MIT"
