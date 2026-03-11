@@ -51,6 +51,6 @@ This repo includes a GitHub Actions workflow that builds Windows and macOS artif
 Example:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
