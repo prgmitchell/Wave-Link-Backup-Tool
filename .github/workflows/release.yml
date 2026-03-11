@@ -55,7 +55,8 @@ jobs:
         shell: bash
         run: |
           APP_PATH="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -print -quit)"
-          ditto -c -k --keepParent "$APP_PATH" "${APP_PATH}.zip"
+          ZIP_PATH="src-tauri/target/release/bundle/macos/Wave.Link.Backup.Tool_${GITHUB_REF_NAME#v}_macos.app.zip"
+          ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
 
       - name: Publish release artifacts
         uses: softprops/action-gh-release@v2
@@ -71,5 +72,4 @@ jobs:
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.nsis.zip
             src-tauri/target/release/bundle/**/*.app.zip
-            src-tauri/target/release/bundle/**/*.dmg
             src-tauri/target/release/bundle/**/*.sig
