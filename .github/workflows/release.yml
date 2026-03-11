@@ -34,14 +34,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish release artifacts
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build app bundles
+        run: npm run tauri build
+
+      - name: Re-sign macOS app bundle
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          APP_PATH="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -print -quit)"
+          if [[ -z "$APP_PATH" ]]; then
+            echo "macOS app bundle not found"
+            exit 1
+          fi
+          xattr -cr "$APP_PATH"
+          codesign --force --deep --sign - "$APP_PATH"
+          codesign --verify --deep --verbose=4 "$APP_PATH"
+
+      - name: Package macOS app zip
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          APP_PATH="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -print -quit)"
+          ditto -c -k --keepParent "$APP_PATH" "${APP_PATH}.zip"
+
+      - name: Publish release artifacts
+        uses: softprops/action-gh-release@v2
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Wave Link Backup Tool ${{ github.ref_name }}
-          releaseBody: |
+          tag_name: ${{ github.ref_name }}
+          name: Wave Link Backup Tool ${{ github.ref_name }}
+          body: |
             Automated release for ${{ github.ref_name }}.
-          releaseDraft: false
+          draft: false
           prerelease: false
+          files: |
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.nsis.zip
+            src-tauri/target/release/bundle/**/*.app.zip
+            src-tauri/target/release/bundle/**/*.sig
