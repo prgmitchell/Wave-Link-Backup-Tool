@@ -71,4 +71,5 @@ jobs:
             src-tauri/target/release/bundle/**/*.exe
             src-tauri/target/release/bundle/**/*.nsis.zip
             src-tauri/target/release/bundle/**/*.app.zip
+            src-tauri/target/release/bundle/**/*.dmg
             src-tauri/target/release/bundle/**/*.sig

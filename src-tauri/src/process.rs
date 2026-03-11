@@ -1,8 +1,7 @@
 use std::process::Command;
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
-#[cfg(target_os = "macos")]
-use std::path::Path;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
@@ -11,7 +10,6 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub const PROCESS_CANDIDATES: &[&str] = &["Elgato.WaveLink", "WaveLink", "WavelinkSEService"];
 pub const BLOCKING_PROCESS_NAMES: &[&str] = &["Elgato.WaveLink", "WaveLink"];
-#[cfg(target_os = "macos")]
 const MACOS_EXECUTABLE_NAME: &str = "WaveLinkMacOS";
 
 fn suppress_console_window(command: &mut Command) -> &mut Command {
