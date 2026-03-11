@@ -1,6 +1,8 @@
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
+#[cfg(target_os = "macos")]
+use std::path::Path;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
@@ -9,6 +11,8 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub const PROCESS_CANDIDATES: &[&str] = &["Elgato.WaveLink", "WaveLink", "WavelinkSEService"];
 pub const BLOCKING_PROCESS_NAMES: &[&str] = &["Elgato.WaveLink", "WaveLink"];
+#[cfg(target_os = "macos")]
+const MACOS_EXECUTABLE_NAME: &str = "WaveLinkMacOS";
 
 fn suppress_console_window(command: &mut Command) -> &mut Command {
     #[cfg(target_os = "windows")]
@@ -45,9 +49,7 @@ pub fn terminate_wavelink_processes() -> Result<Vec<String>, String> {
             let _ = suppress_console_window(&mut cmd_plain).output();
         }
     } else if cfg!(target_os = "macos") {
-        for name in PROCESS_CANDIDATES {
-            let _ = Command::new("pkill").args(["-f", name]).output();
-        }
+        let _ = Command::new("pkill").args(["-x", MACOS_EXECUTABLE_NAME]).output();
     }
 
     // Give the OS a brief moment to retire processes before the next check.
@@ -71,7 +73,7 @@ pub fn launch_wavelink() -> Result<(), String> {
 
     if cfg!(target_os = "macos") {
         let status = Command::new("open")
-            .args(["-a", "Wave Link"])
+            .args(["-a", "Elgato Wave Link"])
             .status()
             .map_err(|e| e.to_string())?;
         if !status.success() {
@@ -136,15 +138,18 @@ fn windows_running_processes() -> Result<Vec<String>, String> {
 
 fn macos_running_processes() -> Result<Vec<String>, String> {
     let output = Command::new("ps")
-        .args(["-ax"])
+        .args(["-ax", "-o", "comm="])
         .output()
         .map_err(|e| e.to_string())?;
-    let text = String::from_utf8_lossy(&output.stdout).to_lowercase();
 
     let mut found = Vec::new();
-    for candidate in PROCESS_CANDIDATES {
-        if text.contains(&candidate.to_lowercase()) {
-            found.push((*candidate).to_string());
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let executable_name = Path::new(line.trim())
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        if executable_name == MACOS_EXECUTABLE_NAME {
+            found.push("WaveLink".to_string());
         }
     }
     found.sort();

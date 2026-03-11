@@ -38,7 +38,7 @@ pub fn plan_restore(path: &Path, options: RestorePlanOptions) -> Result<RestoreP
 
     let temp = tempdir().map_err(|e| e.to_string())?;
     let extracted_manifest = extract_backup_to_dir(path, temp.path())?;
-    let extracted_settings = temp.path().join("Settings.json");
+    let extracted_settings = settings_path(temp.path());
     let backup_json = if extracted_settings.exists() {
         fs::read_to_string(extracted_settings)
             .ok()
@@ -130,7 +130,7 @@ pub fn execute_restore(
     let temp = tempdir().map_err(|e| e.to_string())?;
     let _ = extract_backup_to_dir(Path::new(&plan.backup_path), temp.path())?;
 
-    let backup_settings = temp.path().join("Settings.json");
+    let backup_settings = settings_path(temp.path());
     if backup_settings.exists() && !mapping.is_empty() {
         apply_mapping_to_settings_file(&backup_settings, &mapping)?;
     }

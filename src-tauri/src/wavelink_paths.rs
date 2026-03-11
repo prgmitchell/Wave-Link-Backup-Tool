@@ -2,6 +2,8 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 pub const WINDOWS_PACKAGE_PATH: &str = "Packages\\Elgato.WaveLink_g54w8ztgkx496\\LocalState";
+const MACOS_LOCAL_STATE_PATH: &str =
+    "Library/Containers/com.elgato.WaveLink3/Data/Library/Application Support/com.elgato.WaveLink3";
 
 pub fn default_backup_root() -> PathBuf {
     if cfg!(target_os = "windows") {
@@ -43,6 +45,10 @@ pub fn ws_info_path(local_state_path: &Path) -> PathBuf {
 }
 
 pub fn settings_path(local_state_path: &Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        return local_state_path.join("config.json");
+    }
+
     local_state_path.join("Settings.json")
 }
 
@@ -58,13 +64,8 @@ fn resolve_windows_local_state() -> Option<PathBuf> {
 
 fn resolve_macos_local_state() -> Option<PathBuf> {
     let home = home_dir()?;
-    let candidates = vec![
-        home.join("Library/Application Support/Elgato/Wave Link"),
-        home.join("Library/Containers/com.elgato.WaveLink/Data/Library/Application Support/Elgato/Wave Link"),
-        home.join("Library/Group Containers/group.com.elgato.wavelink/Wave Link"),
-    ];
-
-    candidates.into_iter().find(|candidate| candidate.exists())
+    let path = home.join(MACOS_LOCAL_STATE_PATH);
+    path.exists().then_some(path)
 }
 
 fn home_dir() -> Option<PathBuf> {
