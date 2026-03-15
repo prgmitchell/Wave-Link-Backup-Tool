@@ -84,6 +84,49 @@ h1 {
   gap: 10px;
 }
 
+.location-card {
+  margin-top: 14px;
+  border: 1px solid #334258;
+  border-radius: 12px;
+  background: rgba(12, 18, 28, 0.45);
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+}
+
+.location-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.location-label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.location-path {
+  font-size: 14px;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.location-note {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.location-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 input {
   width: 100%;
   border: 1px solid #41506a;
@@ -387,6 +430,16 @@ h3 {
 
   .create-row {
     grid-template-columns: 1fr;
+  }
+
+  .location-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .location-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .backup-item {

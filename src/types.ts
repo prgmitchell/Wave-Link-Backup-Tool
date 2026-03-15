@@ -41,6 +41,12 @@ export interface BackupCreateResponse {
   manifest: BackupManifest;
 }
 
+export interface BackupLocationResponse {
+  currentPath: string;
+  defaultPath: string;
+  isCustom: boolean;
+}
+
 export interface BackupListItem {
   path: string;
   displayName: string;

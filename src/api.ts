@@ -3,6 +3,7 @@ import type {
   BackupCreateResponse,
   BackupInspectionResponse,
   BackupListItem,
+  BackupLocationResponse,
   DetectInstallationResponse,
   ExecuteRestoreResponse,
   ImportBackupResponse,
@@ -33,6 +34,20 @@ export const createBackupWithName = (backupName?: string) =>
   });
 
 export const listBackups = () => invoke<BackupListItem[]>("list_backups_command");
+
+export const getBackupLocation = () =>
+  invoke<BackupLocationResponse>("get_backup_location_command");
+
+export const setBackupLocation = (path: string) =>
+  invoke<BackupLocationResponse>("set_backup_location_command", {
+    request: { path },
+  });
+
+export const resetBackupLocation = () =>
+  invoke<BackupLocationResponse>("reset_backup_location_command");
+
+export const openPathInFileManager = (path: string) =>
+  invoke<void>("open_path_in_file_manager", { request: { path } });
 
 export const importBackup = (sourcePath: string, overwrite: boolean) =>
   invoke<ImportBackupResponse>("import_backup_command", { sourcePath, overwrite });

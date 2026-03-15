@@ -1,3 +1,4 @@
+mod app_settings;
 mod backup;
 mod commands;
 mod models;
@@ -33,6 +34,9 @@ pub fn run() {
             commands::probe_wavelink_ws,
             commands::create_backup_command,
             commands::list_backups_command,
+            commands::get_backup_location_command,
+            commands::set_backup_location_command,
+            commands::reset_backup_location_command,
             commands::import_backup_command,
             commands::delete_backup_command,
             commands::inspect_backup_command,

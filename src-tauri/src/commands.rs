@@ -1,9 +1,10 @@
+use crate::app_settings::{get_backup_location, reset_backup_location, set_backup_location};
 use crate::backup::{create_backup, delete_backup_file, import_backup_file, inspect_backup, list_backups};
 use crate::models::{
-    BackupCreateResponse, BackupInspectionResponse, BackupListItem, BackupOptions,
-    DeleteBackupRequest, DetectInstallationResponse, ExecuteRestoreConfirmation,
-    ExecuteRestoreResponse, ImportBackupResponse, OpenPathRequest, ProbeWsResponse, RestorePlan,
-    RestorePlanOptions,
+    BackupCreateResponse, BackupInspectionResponse, BackupListItem, BackupLocationRequest,
+    BackupLocationResponse, BackupOptions, DeleteBackupRequest, DetectInstallationResponse,
+    ExecuteRestoreConfirmation, ExecuteRestoreResponse, ImportBackupResponse, OpenPathRequest,
+    ProbeWsResponse, RestorePlan, RestorePlanOptions,
 };
 use crate::process::running_wavelink_processes;
 use crate::restore::{execute_restore, force_close_wavelink, plan_restore, rollback_last_restore};
@@ -98,6 +99,23 @@ pub fn create_backup_command(
 #[tauri::command]
 pub fn list_backups_command() -> Result<Vec<BackupListItem>, String> {
     list_backups()
+}
+
+#[tauri::command]
+pub fn get_backup_location_command() -> Result<BackupLocationResponse, String> {
+    get_backup_location()
+}
+
+#[tauri::command]
+pub fn set_backup_location_command(
+    request: BackupLocationRequest,
+) -> Result<BackupLocationResponse, String> {
+    set_backup_location(request)
+}
+
+#[tauri::command]
+pub fn reset_backup_location_command() -> Result<BackupLocationResponse, String> {
+    reset_backup_location()
 }
 
 #[tauri::command]

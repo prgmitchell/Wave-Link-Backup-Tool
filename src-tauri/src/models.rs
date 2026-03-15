@@ -42,6 +42,20 @@ pub struct BackupCreateResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BackupLocationRequest {
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupLocationResponse {
+    pub current_path: String,
+    pub default_path: String,
+    pub is_custom: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BackupListItem {
     pub path: String,
     pub display_name: String,

@@ -1,9 +1,10 @@
+use crate::app_settings::managed_backup_root;
 use crate::models::{
     BackupCreateResponse, BackupFileEntry, BackupInspectionResponse, BackupListItem,
     BackupManifest, BackupOptions, ImportBackupResponse,
 };
 use crate::wavelink_paths::{
-    default_backup_root, resolve_wavelink_local_state, settings_path, ws_info_path,
+    resolve_wavelink_local_state, settings_path, ws_info_path,
 };
 use crate::websocket_probe::{app_info_from_probe, probe_wave_link_ws};
 use chrono::Utc;
@@ -34,7 +35,8 @@ fn create_backup_from_local_state(
     let output_dir = options
         .output_dir
         .map(PathBuf::from)
-        .unwrap_or_else(default_backup_root);
+        .map(Ok)
+        .unwrap_or_else(managed_backup_root)?;
     fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
     let now = Utc::now();
@@ -223,7 +225,7 @@ pub fn read_live_channels_snapshot(path: &Path) -> Result<Option<serde_json::Val
 }
 
 pub fn list_backups() -> Result<Vec<BackupListItem>, String> {
-    let backup_root = default_backup_root();
+    let backup_root = managed_backup_root()?;
     if !backup_root.exists() {
         return Ok(Vec::new());
     }
@@ -290,7 +292,7 @@ pub fn import_backup_file(source_path: &Path, overwrite: bool) -> Result<ImportB
         return Err("Imported backup failed integrity checks".to_string());
     }
 
-    let backup_root = default_backup_root();
+    let backup_root = managed_backup_root()?;
     fs::create_dir_all(&backup_root).map_err(|e| e.to_string())?;
     let file_name = source_path
         .file_name()
@@ -325,7 +327,7 @@ pub fn import_backup_file(source_path: &Path, overwrite: bool) -> Result<ImportB
 }
 
 pub fn delete_backup_file(path: &Path) -> Result<(), String> {
-    let backup_root = default_backup_root()
+    let backup_root = managed_backup_root()?
         .canonicalize()
         .map_err(|e| format!("Backup folder is unavailable: {e}"))?;
     let candidate = path

@@ -5,17 +5,22 @@ import {
   deleteBackup,
   detectInstallation,
   executeRestore,
+  getBackupLocation,
   importBackup,
   inspectBackup,
   listBackups,
+  openPathInFileManager,
   planRestore,
+  resetBackupLocation,
+  setBackupLocation,
   terminateWaveLink,
 } from "./api";
-import type { BackupListItem } from "./types";
+import type { BackupListItem, BackupLocationResponse } from "./types";
 import "./App.css";
 
 function App() {
   const [backups, setBackups] = useState<BackupListItem[]>([]);
+  const [backupLocation, setBackupLocationState] = useState<BackupLocationResponse | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [busyMessage, setBusyMessage] = useState("");
   const [toast, setToast] = useState<{ id: number; message: string; kind: "success" | "error" } | null>(null);
@@ -29,9 +34,26 @@ function App() {
   const [deleteCandidate, setDeleteCandidate] = useState<BackupListItem | null>(null);
   const [overwriteImportSourcePath, setOverwriteImportSourcePath] = useState<string | null>(null);
 
+  const showToast = useCallback((message: string, kind: "success" | "error" = "success") => {
+    setToast({ id: Date.now(), message, kind });
+  }, []);
+
+  const clearAppError = useCallback(() => {
+    // no-op: errors are surfaced as toasts
+  }, []);
+
+  const setAppError = useCallback(
+    (message: string, details: string) => {
+      console.error(message, details);
+      showToast(message, "error");
+    },
+    [showToast],
+  );
+
   const refreshData = useCallback(async () => {
-    const backupItems = await listBackups();
+    const [backupItems, location] = await Promise.all([listBackups(), getBackupLocation()]);
     setBackups(backupItems);
+    setBackupLocationState(location);
   }, []);
 
   useEffect(() => {
@@ -42,7 +64,7 @@ function App() {
         setAppError("Could not refresh backup data.", normalizeErrorDetails(err));
       }
     })();
-  }, [refreshData]);
+  }, [refreshData, setAppError]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -106,6 +128,42 @@ function App() {
       }
       clearAppError();
       await refreshData();
+    });
+  }
+
+  async function handleChooseBackupLocation() {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: "Choose Backup Folder",
+      defaultPath: backupLocation?.currentPath,
+    });
+    if (typeof selected !== "string") return;
+
+    await withBusy(async () => {
+      const nextLocation = await setBackupLocation(selected);
+      setBackupLocationState(nextLocation);
+      showToast("Backup location updated.");
+      clearAppError();
+      await refreshData();
+    });
+  }
+
+  async function handleResetBackupLocation() {
+    await withBusy(async () => {
+      const nextLocation = await resetBackupLocation();
+      setBackupLocationState(nextLocation);
+      showToast("Backup location reset to default.");
+      clearAppError();
+      await refreshData();
+    });
+  }
+
+  async function handleOpenBackupLocation() {
+    if (!backupLocation) return;
+    await withBusy(async () => {
+      await openPathInFileManager(backupLocation.currentPath);
+      clearAppError();
     });
   }
 
@@ -209,19 +267,6 @@ function App() {
     }
   }
 
-  function clearAppError() {
-    // no-op: errors are surfaced as toasts
-  }
-
-  function setAppError(message: string, details: string) {
-    console.error(message, details);
-    showToast(message, "error");
-  }
-
-  function showToast(message: string, kind: "success" | "error" = "success") {
-    setToast({ id: Date.now(), message, kind });
-  }
-
   return (
     <div className="workspace">
       <header className="hero">
@@ -234,6 +279,34 @@ function App() {
         <p className="subtle">
           Create, import, restore, and delete backups in one place.
         </p>
+        <div className="location-card">
+          <div className="location-copy">
+            <span className="location-label">Backup folder</span>
+            <span className="location-path" title={backupLocation?.currentPath ?? "Loading..."}>
+              {backupLocation?.currentPath ?? "Loading..."}
+            </span>
+            {backupLocation?.isCustom ? (
+              <span className="location-note">Using a custom managed backup location.</span>
+            ) : (
+              <span className="location-note">Using the default managed backup location.</span>
+            )}
+          </div>
+          <div className="location-actions">
+            <button className="ghost" disabled={isBusy || !backupLocation} onClick={handleOpenBackupLocation}>
+              Open Folder
+            </button>
+            <button disabled={isBusy} onClick={handleChooseBackupLocation}>
+              Change Location
+            </button>
+            <button
+              className="ghost"
+              disabled={isBusy || !backupLocation?.isCustom}
+              onClick={handleResetBackupLocation}
+            >
+              Reset
+            </button>
+          </div>
+        </div>
         <div className="create-row">
           <input
             value={backupName}
